@@ -108,6 +108,38 @@ router.post('/clients', async (req, res) => {
   }
 });
 
+router.put('/clients/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, company_name, phone, email, address } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'Client name is required' });
+  }
+  try {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE clients SET name = ?, company_name = ?, phone = ?, email = ?, address = ? WHERE id = ?`,
+      [name, company_name, phone, email, address, id]
+    );
+    res.json({ id: parseInt(id), name, company_name, phone, email, address });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/clients/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM clients WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Client deleted successfully' });
+  } catch (error) {
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
+      return res.status(400).json({ error: 'Cannot delete client because they have existing quotations.' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // 3. Pre-defined Modules Routes
 // ==========================================
@@ -238,7 +270,7 @@ router.get('/quotations/:id', async (req, res) => {
 });
 
 router.post('/quotations', async (req, res) => {
-  const { client_id, modules, notes } = req.body;
+  const { client_id, modules, server_fee, server_fee_duration, notes } = req.body;
 
   if (!client_id) {
     return res.status(400).json({ error: 'Client is required' });
@@ -247,12 +279,16 @@ router.post('/quotations', async (req, res) => {
     return res.status(400).json({ error: 'At least one module must be selected' });
   }
 
+  const fee = parseFloat(server_fee) || 0;
+  const duration = parseInt(server_fee_duration) || 1;
+  const totalServerFee = fee * duration;
+
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
 
     // Calculate total amount
-    let totalAmount = 0;
+    let totalAmount = totalServerFee;
     for (const m of modules) {
       totalAmount += Number(m.price || 0);
     }
@@ -266,9 +302,9 @@ router.post('/quotations', async (req, res) => {
 
     // Insert Quotation Header
     const [quoteResult] = await connection.query(`
-      INSERT INTO quotations (quote_number, client_id, quote_date, total_amount, paid_amount, balance, status, notes)
-      VALUES (?, ?, ?, ?, 0.00, ?, 'Draft', ?)
-    `, [quoteNumber, client_id, quoteDate, totalAmount, totalAmount, notes || '']);
+      INSERT INTO quotations (quote_number, client_id, quote_date, total_amount, paid_amount, balance, status, notes, server_fee, server_fee_duration)
+      VALUES (?, ?, ?, ?, 0.00, ?, 'Draft', ?, ?, ?)
+    `, [quoteNumber, client_id, quoteDate, totalAmount, totalAmount, notes || '', fee, duration]);
 
     const quotationId = quoteResult.insertId;
 
@@ -288,6 +324,17 @@ router.post('/quotations', async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     connection.release();
+  }
+});
+
+router.delete('/quotations/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM quotations WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Quotation deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -92,10 +92,34 @@ export async function initializeDatabase() {
         balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
         status VARCHAR(50) NOT NULL DEFAULT 'Draft', -- Draft, Sent, Partially Paid, Fully Paid, Cancelled
         notes TEXT,
+        server_fee DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+        server_fee_duration INT NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT
       )
     `);
+
+    // Add server_fee column dynamically if it does not exist (for existing tables)
+    try {
+      const [columns] = await pool.query("SHOW COLUMNS FROM quotations LIKE 'server_fee'");
+      if (columns.length === 0) {
+        await pool.query("ALTER TABLE quotations ADD COLUMN server_fee DECIMAL(15, 2) NOT NULL DEFAULT 0.00 AFTER notes");
+        console.log("Database Migration: server_fee column added to quotations table.");
+      }
+    } catch (migError) {
+      console.error("Database Migration Error: Failed to add server_fee column:", migError.message);
+    }
+
+    // Add server_fee_duration column dynamically if it does not exist (for existing tables)
+    try {
+      const [columns] = await pool.query("SHOW COLUMNS FROM quotations LIKE 'server_fee_duration'");
+      if (columns.length === 0) {
+        await pool.query("ALTER TABLE quotations ADD COLUMN server_fee_duration INT NOT NULL DEFAULT 1 AFTER server_fee");
+        console.log("Database Migration: server_fee_duration column added to quotations table.");
+      }
+    } catch (migError) {
+      console.error("Database Migration Error: Failed to add server_fee_duration column:", migError.message);
+    }
 
     // Quotation details table (stores modules selected in a quotation with captured states/pricing)
     await pool.query(`

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
+import html2pdf from 'html2pdf.js';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -23,7 +24,7 @@ import {
   Building
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = import.meta.env.PROD ? '/api' : 'http://localhost:5000/api';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(sessionStorage.getItem('isLoggedIn') === 'true');
@@ -95,6 +96,7 @@ export default function App() {
   });
 
   const [clientForm, setClientForm] = useState({
+    id: null,
     name: '',
     company_name: '',
     phone: '',
@@ -115,6 +117,8 @@ export default function App() {
   const [quoteClientId, setQuoteClientId] = useState('');
   const [quoteSelectedModules, setQuoteSelectedModules] = useState([]); // Array of modules with overridden prices/features
   const [quoteNotes, setQuoteNotes] = useState('');
+  const [quoteServerFee, setQuoteServerFee] = useState('');
+  const [quoteServerFeeDuration, setQuoteServerFeeDuration] = useState('12'); // default to 12 months
 
   // Auto-hide alert banners after 4 seconds
   useEffect(() => {
@@ -265,32 +269,100 @@ export default function App() {
     }
   };
 
-  const handleCreateClient = async (e) => {
+  const handleSaveClient = async (e) => {
     e.preventDefault();
     if (!clientForm.name) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/clients`, {
-        method: 'POST',
+      let url = `${API_BASE}/clients`;
+      let method = 'POST';
+      if (clientForm.id) {
+        url = `${API_BASE}/clients/${clientForm.id}`;
+        method = 'PUT';
+      }
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clientForm)
       });
+
       if (res.ok) {
-        const newClient = await res.json();
-        setClients(prev => [...prev, newClient]);
-        setClientForm({ name: '', company_name: '', phone: '', email: '', address: '' });
-        setShowClientModal(false);
-        setSuccessMsg('Client added successfully!');
-        if (currentView === 'create-quotation') {
-          setQuoteClientId(newClient.id);
+        const savedClient = await res.json();
+        if (clientForm.id) {
+          setClients(prev => prev.map(c => c.id === savedClient.id ? savedClient : c));
+          setSuccessMsg('Client profile updated successfully!');
+        } else {
+          setClients(prev => [...prev, savedClient]);
+          setSuccessMsg('Client added successfully!');
+          if (currentView === 'create-quotation') {
+            setQuoteClientId(savedClient.id);
+          }
         }
+        setClientForm({ id: null, name: '', company_name: '', phone: '', email: '', address: '' });
+        setShowClientModal(false);
       } else {
-        setError('Failed to create client');
+        const errData = await res.json();
+        setError(errData.error || 'Failed to save client');
       }
     } catch (err) {
       setError('Connection failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "Do you want to delete this client? This action cannot be undone.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel',
+      background: '#0a0f1d',
+      color: '#f8fafc',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: 'rgba(255,255,255,0.08)',
+      customClass: {
+        popup: 'glass-panel'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          Swal.fire({
+            title: 'Deleted!',
+            text: 'Client has been deleted.',
+            icon: 'success',
+            background: '#0a0f1d',
+            color: '#f8fafc',
+            confirmButtonColor: '#8b5cf6'
+          });
+          fetchClients();
+        } else {
+          const errData = await res.json();
+          Swal.fire({
+            title: 'Error!',
+            text: errData.error || 'Failed to delete client.',
+            icon: 'error',
+            background: '#0a0f1d',
+            color: '#f8fafc',
+            confirmButtonColor: '#8b5cf6'
+          });
+        }
+      } catch (err) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Connection failed.',
+          icon: 'error',
+          background: '#0a0f1d',
+          color: '#f8fafc',
+          confirmButtonColor: '#8b5cf6'
+        });
+      }
     }
   };
 
@@ -368,6 +440,64 @@ export default function App() {
           Swal.fire({
             title: 'Error!',
             text: 'Failed to delete module.',
+            icon: 'error',
+            background: '#0a0f1d',
+            color: '#f8fafc',
+            confirmButtonColor: '#8b5cf6'
+          });
+        }
+      } catch (err) {
+        Swal.fire({
+          title: 'Error!',
+          text: 'Connection failed.',
+          icon: 'error',
+          background: '#0a0f1d',
+          color: '#f8fafc',
+          confirmButtonColor: '#8b5cf6'
+        });
+      }
+    }
+  };
+
+  const handleDeleteQuotation = async (id) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: "Do you want to delete this quotation? This action cannot be undone.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, delete it!',
+      cancelButtonText: 'Cancel',
+      background: '#0a0f1d',
+      color: '#f8fafc',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: 'rgba(255,255,255,0.08)',
+      customClass: {
+        popup: 'glass-panel'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`${API_BASE}/quotations/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          Swal.fire({
+            title: 'Deleted!',
+            text: 'Quotation has been deleted.',
+            icon: 'success',
+            background: '#0a0f1d',
+            color: '#f8fafc',
+            confirmButtonColor: '#8b5cf6'
+          });
+          fetchQuotations();
+          fetchDashboardStats();
+          if (currentView === 'view-quotation' || currentView === 'voucher-view') {
+            setCurrentView('quotations-list');
+          }
+        } else {
+          const errData = await res.json();
+          Swal.fire({
+            title: 'Error!',
+            text: errData.error || 'Failed to delete quotation.',
             icon: 'error',
             background: '#0a0f1d',
             color: '#f8fafc',
@@ -469,6 +599,8 @@ export default function App() {
         body: JSON.stringify({
           client_id: parseInt(quoteClientId),
           modules: cleanModules,
+          server_fee: parseFloat(quoteServerFee) || 0,
+          server_fee_duration: parseInt(quoteServerFeeDuration) || 1,
           notes: quoteNotes
         })
       });
@@ -480,6 +612,8 @@ export default function App() {
         setQuoteClientId('');
         setQuoteSelectedModules([]);
         setQuoteNotes('');
+        setQuoteServerFee('');
+        setQuoteServerFeeDuration('12');
         setWizardStep(1);
         
         // Refresh tables and view details
@@ -561,7 +695,7 @@ export default function App() {
       jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
     
-    window.html2pdf()
+    html2pdf()
       .from(element)
       .set(opt)
       .save()
@@ -694,7 +828,23 @@ export default function App() {
           <div className="invoice-totals" style={{ width: '320px' }}>
             <div className="invoice-total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
               <span>Subtotal:</span>
-              <span style={{ fontWeight: '500' }}>{formatMoney(quote.total_amount)}</span>
+              <span style={{ fontWeight: '500' }}>{formatMoney(quote.total_amount - ((quote.server_fee || 0) * (quote.server_fee_duration || 1)))}</span>
+            </div>
+            {quote.server_fee && Number(quote.server_fee) > 0 ? (
+              <div className="invoice-total-row" style={{ display: 'flex', justifyContent: 'flex-start', padding: '0.5rem 0', gap: '1rem', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                  <span style={{ fontSize: '0.825rem', color: '#64748b' }}>
+                    Server Fee ({formatMoney(quote.server_fee)} x {quote.server_fee_duration || 1} mos):
+                  </span>
+                  <span style={{ fontWeight: '500' }}>
+                    {formatMoney(quote.server_fee * (quote.server_fee_duration || 1))}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <div className="invoice-total-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', fontWeight: '600', borderTop: '1px solid #cbd5e1' }}>
+              <span>Total Amount:</span>
+              <span>{formatMoney(quote.total_amount)}</span>
             </div>
             <div className="invoice-total-row paid" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', color: '#10b981 !important' }}>
               <span>Amount Paid:</span>
@@ -1192,11 +1342,39 @@ export default function App() {
                     </div>
                   ))}
 
+                  {/* Server Fee Input */}
+                  <div className="form-group" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px dashed var(--border-color)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <label className="form-label">Server Fee / Month (MMK)</label>
+                        <input 
+                          type="number" 
+                          className="form-control" 
+                          placeholder="E.g. 15000"
+                          value={quoteServerFee} 
+                          onChange={(e) => setQuoteServerFee(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="form-label">Duration (Months)</label>
+                        <input 
+                          type="number" 
+                          className="form-control" 
+                          min="1"
+                          placeholder="Months"
+                          value={quoteServerFeeDuration} 
+                          onChange={(e) => setQuoteServerFeeDuration(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="summary-item total">
                     <span>Grand Total:</span>
                     <span>
                       {formatMoney(
-                        quoteSelectedModules.reduce((acc, curr) => acc + (parseFloat(curr.price) || 0), 0)
+                        quoteSelectedModules.reduce((acc, curr) => acc + (parseFloat(curr.price) || 0), 0) + 
+                        ((parseFloat(quoteServerFee) || 0) * (parseInt(quoteServerFeeDuration) || 1))
                       )}
                     </span>
                   </div>
@@ -1253,10 +1431,21 @@ export default function App() {
                           <td style={{ textAlign: 'right', fontWeight: '600' }}>{formatMoney(qm.price)}</td>
                         </tr>
                       ))}
+                      <tr style={{ borderTop: '1px solid var(--border-color)' }}>
+                        <td style={{ color: 'var(--text-secondary)' }}>
+                          Server Fee ({formatMoney(quoteServerFee || 0)} x {quoteServerFeeDuration || 1} mos):
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                          {formatMoney((parseFloat(quoteServerFee) || 0) * (parseInt(quoteServerFeeDuration) || 1))}
+                        </td>
+                      </tr>
                       <tr style={{ fontWeight: '700', borderTop: '2px solid var(--border-color)' }}>
                         <td>Total Quotation Amount:</td>
                         <td style={{ textAlign: 'right', color: 'var(--primary)' }}>
-                          {formatMoney(quoteSelectedModules.reduce((a, b) => a + (parseFloat(b.price) || 0), 0))}
+                          {formatMoney(
+                            quoteSelectedModules.reduce((a, b) => a + (parseFloat(b.price) || 0), 0) + 
+                            ((parseFloat(quoteServerFee) || 0) * (parseInt(quoteServerFeeDuration) || 1))
+                          )}
                         </td>
                       </tr>
                     </tbody>
@@ -1309,6 +1498,9 @@ export default function App() {
                 </button>
                 <button className="btn btn-secondary" onClick={handlePrint}>
                   <Printer size={16} /> Print
+                </button>
+                <button className="btn btn-danger" onClick={() => handleDeleteQuotation(selectedQuotation.id)}>
+                  <Trash2 size={16} /> Delete
                 </button>
                 {Number(selectedQuotation.balance) > 0 && (
                   <button className="btn btn-primary" onClick={() => setShowPaymentModal(true)}>
@@ -1382,6 +1574,7 @@ export default function App() {
                       <th>Client Name</th>
                       <th>Company</th>
                       <th>Date</th>
+                      <th>Server Fee</th>
                       <th>Total Amount</th>
                       <th>Outstanding</th>
                       <th>Status</th>
@@ -1391,7 +1584,7 @@ export default function App() {
                   <tbody>
                     {filteredQuotations.length === 0 ? (
                       <tr>
-                        <td colSpan="8" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                        <td colSpan="9" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                           No quotations matching your search.
                         </td>
                       </tr>
@@ -1402,6 +1595,14 @@ export default function App() {
                           <td>{q.client_name}</td>
                           <td>{q.client_company || '-'}</td>
                           <td>{new Date(q.quote_date).toLocaleDateString()}</td>
+                          <td>
+                            {q.server_fee && Number(q.server_fee) > 0 ? (
+                              <>
+                                <div>{formatMoney(q.server_fee)} / mo</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({q.server_fee_duration || 1} mos)</div>
+                              </>
+                            ) : '-'}
+                          </td>
                           <td>{formatMoney(q.total_amount)}</td>
                           <td style={{ color: Number(q.balance) > 0 ? 'var(--accent)' : 'inherit', fontWeight: '500' }}>{formatMoney(q.balance)}</td>
                           <td>
@@ -1416,6 +1617,9 @@ export default function App() {
                               </button>
                               <button className="btn btn-primary btn-sm btn-glow" onClick={() => viewQuotationVoucher(q.id)}>
                                 View Voucher
+                              </button>
+                              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteQuotation(q.id)}>
+                                <Trash2 size={12} /> Delete
                               </button>
                             </div>
                           </td>
@@ -1564,7 +1768,7 @@ export default function App() {
               <button 
                 className="btn btn-primary" 
                 onClick={() => {
-                  setClientForm({ name: '', company_name: '', phone: '', email: '', address: '' });
+                  setClientForm({ id: null, name: '', company_name: '', phone: '', email: '', address: '' });
                   setShowClientModal(true);
                 }}
               >
@@ -1582,12 +1786,13 @@ export default function App() {
                       <th>Phone</th>
                       <th>Email</th>
                       <th>Address</th>
+                      <th style={{ textAlign: 'center' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {clients.length === 0 ? (
                       <tr>
-                        <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
                           No clients saved.
                         </td>
                       </tr>
@@ -1600,6 +1805,32 @@ export default function App() {
                           <td>{c.email || '-'}</td>
                           <td style={{ maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {c.address || '-'}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                              <button 
+                                className="btn btn-secondary btn-sm" 
+                                onClick={() => {
+                                  setClientForm({
+                                    id: c.id,
+                                    name: c.name,
+                                    company_name: c.company_name || '',
+                                    phone: c.phone || '',
+                                    email: c.email || '',
+                                    address: c.address || ''
+                                  });
+                                  setShowClientModal(true);
+                                }}
+                              >
+                                <Edit3 size={12} /> Edit
+                              </button>
+                              <button 
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleDeleteClient(c.id)}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -1798,10 +2029,10 @@ export default function App() {
         <div className="modal-overlay no-print">
           <div className="modal-content">
             <div className="modal-header">
-              <h2 className="modal-title">Create Client Profile</h2>
-              <button className="modal-close" onClick={() => setShowClientModal(false)}>×</button>
+              <h2 className="modal-title">{clientForm.id ? 'Edit Client Profile' : 'Create Client Profile'}</h2>
+              <button className="modal-close" onClick={() => { setShowClientModal(false); setClientForm({ id: null, name: '', company_name: '', phone: '', email: '', address: '' }); }}>×</button>
             </div>
-            <form onSubmit={handleCreateClient}>
+            <form onSubmit={handleSaveClient}>
               <div className="form-group">
                 <label className="form-label">Client Name *</label>
                 <input 
@@ -1859,8 +2090,10 @@ export default function App() {
               </div>
 
               <div className="form-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowClientModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={loading}>Create Client</button>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowClientModal(false); setClientForm({ id: null, name: '', company_name: '', phone: '', email: '', address: '' }); }}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {clientForm.id ? 'Save Changes' : 'Create Client'}
+                </button>
               </div>
             </form>
           </div>
