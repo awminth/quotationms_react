@@ -1344,8 +1344,8 @@ export default function App() {
 
                   {/* Server Fee Input */}
                   <div className="form-group" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px dashed var(--border-color)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                      <div>
+                    <div className="server-fee-grid">
+                      <div className="server-fee-field">
                         <label className="form-label">Server Fee / Month (MMK)</label>
                         <input 
                           type="number" 
@@ -1355,7 +1355,7 @@ export default function App() {
                           onChange={(e) => setQuoteServerFee(e.target.value)}
                         />
                       </div>
-                      <div>
+                      <div className="server-fee-field">
                         <label className="form-label">Duration (Months)</label>
                         <input 
                           type="number" 

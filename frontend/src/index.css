@@ -900,6 +900,23 @@ select.form-control option {
   margin-top: 0.5rem;
 }
 
+.server-fee-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.server-fee-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.server-fee-field .form-label {
+  min-height: 2.5rem;
+  display: flex;
+  align-items: flex-end;
+}
+
 .feature-edit-item {
   display: flex;
   align-items: center;
