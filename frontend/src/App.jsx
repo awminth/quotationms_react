@@ -734,7 +734,7 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <img src="/logo.png" alt="Logo" style={{ width: '72px', height: '72px', borderRadius: '10px', objectFit: 'cover' }} />
+              <img src="/logo.png" alt="Marctober Tech" style={{ width: '72px', height: '72px', borderRadius: '10px', objectFit: 'contain', background: '#ffffff' }} />
             </div>
             <div>
               <h1 style={{ fontSize: '1.85rem', fontWeight: '850', letterSpacing: '-0.5px', color: '#0f172a !important', margin: 0, lineHeight: 1.2 }}>
@@ -974,7 +974,7 @@ export default function App() {
         <div className="login-container">
           <div className="login-card glass-panel">
             <div className="login-header">
-              <img src="/logo.png" alt="Logo" style={{ width: '64px', height: '64px', borderRadius: '16px', marginBottom: '1rem', objectFit: 'cover', boxShadow: '0 8px 20px rgba(139, 92, 246, 0.35)' }} />
+              <img src="/logo.png" alt="Marctober Tech" style={{ width: '72px', height: '72px', borderRadius: '16px', marginBottom: '1rem', objectFit: 'contain', background: '#ffffff', boxShadow: '0 8px 20px rgba(15, 23, 42, 0.18)' }} />
               <h1 className="login-title">QuotePro</h1>
               <p className="login-subtitle">Quotation Management System</p>
             </div>
@@ -1054,7 +1054,7 @@ export default function App() {
           {currentView !== 'voucher-view' && (
             <aside className="sidebar no-print">
               <div className="logo-container">
-                <img src="/logo.png" alt="Logo" style={{ width: '38px', height: '38px', borderRadius: '10px', objectFit: 'cover', boxShadow: '0 4px 15px rgba(139, 92, 246, 0.35)' }} />
+                <img src="/logo.png" alt="Marctober Tech" style={{ width: '40px', height: '40px', borderRadius: '10px', objectFit: 'contain', background: '#ffffff', boxShadow: '0 4px 12px rgba(15, 23, 42, 0.25)' }} />
                 <span className="logo-text">QuotePro</span>
               </div>
 
